@@ -33,9 +33,9 @@ readBufferCount: 512
 externalAuthenticationURL:
 
 # Enable the HTTP API.
-api: yes
+api: no
 # Address of the API listener.
-apiAddress: :9997
+apiAddress: 127.0.0.1:9997
 
 # Enable Prometheus-compatible metrics.
 metrics: no
@@ -131,18 +131,6 @@ hlsSegmentMaxSize: 50M
 # This allows to play the HLS stream from an external website.
 hlsAllowOrigin: '*'
 
-######################SELF######################
-
-# disable support for the FLV protocol.
-flvDisable: no
-# address of the FLV listener.
-flvAddress: :8889
-
-#store of sqllite DB 
-store: yes
-#store of path
-storePath: C:/data/server.db
-
 ###############################################
 # Path parameters
 
@@ -153,19 +141,7 @@ storePath: C:/data/server.db
 # The settings under the path "all" are applied to all paths that do not match
 # another entry.
 paths:
-  ch1:
-    source: rtsp://192.168.35.108/ch2
-    sourceOnDemand: yes
-  ch2:
-    source: rtsp://admin:qq111111@10.1.72.220:554/psia/streaming/channels/501
-    sourceOnDemand: yes
-  ~^ff/(.+):
-    runOnDemand: ffmpeg -re -i rtsp://localhost:$RTSP_PORT/$G1 -vcodec libx264 -preset medium -acodec copy -f rtsp rtsp://localhost:$RTSP_PORT/$RTSP_PATH
-    runOnDemandRestart: yes
-    runOnDemandStartTimeout: 10s
-    runOnDemandCloseAfter: 10s
-    disablePublisherOverride: yes
-  ~^publish/(.+):
+  all:
     # Source of the stream. This can be:
     # * publisher -> the stream is published by a RTSP or RTMP client
     # * rtsp://existing-url -> the stream is pulled from another RTSP server / camera

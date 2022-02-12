@@ -170,6 +170,9 @@ type Conf struct {
 	RunOnConnect              string          `json:"runOnConnect"`
 	RunOnConnectRestart       bool            `json:"runOnConnectRestart"`
 
+	Store     bool   `json:"store"`
+	StorePath string `json:"storePath"`
+
 	// RTSP
 	RTSPDisable       bool        `json:"rtspDisable"`
 	Protocols         Protocols   `json:"protocols"`
@@ -198,6 +201,10 @@ type Conf struct {
 	HLSSegmentDuration StringDuration `json:"hlsSegmentDuration"`
 	HLSSegmentMaxSize  StringSize     `json:"hlsSegmentMaxSize"`
 	HLSAllowOrigin     string         `json:"hlsAllowOrigin"`
+
+	// FLV
+	FLVDisable bool   `json:"flvDisable"`
+	FLVAddress string `json:"flvAddress"`
 
 	// paths
 	Paths map[string]*PathConf `json:"paths"`
@@ -334,6 +341,10 @@ func (conf *Conf) CheckAndFillMissing() error {
 
 	if conf.HLSAddress == "" {
 		conf.HLSAddress = ":8888"
+	}
+
+	if conf.FLVAddress == "" {
+		conf.FLVAddress = ":8889"
 	}
 
 	if conf.HLSSegmentCount == 0 {

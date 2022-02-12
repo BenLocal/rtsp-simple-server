@@ -29,6 +29,10 @@ type testStruct struct {
 	MyMap map[string]*mapEntry
 }
 
+type testStruct2 struct {
+	MyPtr *mapEntry
+}
+
 func TestEnvironment(t *testing.T) {
 	os.Setenv("MYPREFIX_MYSTRING", "testcontent")
 	defer os.Unsetenv("MYPREFIX_MYSTRING")
@@ -63,4 +67,15 @@ func TestEnvironment(t *testing.T) {
 	v, ok := s.MyMap["mykey2"]
 	require.Equal(t, true, ok)
 	require.Equal(t, "asd", v.MyValue)
+}
+
+func TestPtrEnvironment(t *testing.T) {
+	os.Setenv("MYPREFIX_MYPTR_MYVALUE", "testcontent")
+	defer os.Unsetenv("MYPREFIX_MYPTR_MYVALUE")
+
+	var s testStruct2
+	err := loadFromEnvironment("MYPREFIX", &s)
+	require.NoError(t, err)
+
+	require.Equal(t, "testcontent", s.MyPtr.MyValue)
 }
