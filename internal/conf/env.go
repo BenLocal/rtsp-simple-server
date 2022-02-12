@@ -121,6 +121,18 @@ func loadEnvInternal(env map[string]string, prefix string, rv reflect.Value) err
 			}
 		}
 		return nil
+
+	case reflect.Ptr:
+		if rv.IsNil() {
+			rv.Set(reflect.New(rv.Type().Elem()))
+		}
+
+		err := loadEnvInternal(env, prefix, rv.Elem())
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 
 	return fmt.Errorf("unsupported type: %v", rt)

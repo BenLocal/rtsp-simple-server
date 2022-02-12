@@ -39,6 +39,9 @@ type Core struct {
 	api             *api
 	confWatcher     *confwatcher.ConfWatcher
 
+	flvServer *flvServer
+	pathStore *pathStore
+
 	// in
 	apiConfigSet chan *conf.Conf
 
@@ -193,6 +196,20 @@ func (p *Core) createResources(initial bool) error {
 
 	if initial {
 		p.externalCmdPool = externalcmd.NewPool()
+	}
+
+	if p.conf.Store {
+		if p.pathStore == nil {
+			p.pathStore = newStore(
+				p.conf,
+				p,
+			)
+
+			if p.pathStore != nil {
+				// reset conf
+				p.conf = p.pathStore.conf
+			}
+		}
 	}
 
 	if p.conf.Metrics {
@@ -350,6 +367,22 @@ func (p *Core) createResources(initial bool) error {
 		}
 	}
 
+	if !p.conf.FLVDisable {
+		if p.flvServer == nil {
+			p.flvServer, err = newFlvServer(
+				p.ctx,
+				p.conf.FLVAddress,
+				p.pathManager,
+				p,
+				p.conf.ReadBufferCount,
+				p.conf.ExternalAuthenticationURL,
+			)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	if p.conf.API {
 		if p.api == nil {
 			p.api, err = newAPI(
@@ -360,7 +393,9 @@ func (p *Core) createResources(initial bool) error {
 				p.rtspsServer,
 				p.rtmpServer,
 				p.hlsServer,
-				p)
+				p.pathStore,
+				p,
+			)
 			if err != nil {
 				return err
 			}
@@ -490,6 +525,15 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 		closeHLSServer = true
 	}
 
+	closeFLVServer := false
+	if newConf == nil ||
+		newConf.FLVAddress != p.conf.FLVAddress ||
+		newConf.FLVDisable != p.conf.FLVDisable ||
+		newConf.ReadBufferCount != p.conf.ReadBufferCount ||
+		closePathManager {
+		closeFLVServer = true
+	}
+
 	closeAPI := false
 	if newConf == nil ||
 		newConf.API != p.conf.API ||
@@ -534,6 +578,11 @@ func (p *Core) closeResources(newConf *conf.Conf, calledByAPI bool) {
 	if closeHLSServer && p.hlsServer != nil {
 		p.hlsServer.close()
 		p.hlsServer = nil
+	}
+
+	if closeFLVServer && p.flvServer != nil {
+		p.flvServer.close()
+		p.flvServer = nil
 	}
 
 	if closeRTMPServer && p.rtmpServer != nil {

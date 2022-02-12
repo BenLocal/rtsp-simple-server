@@ -2,3 +2,4 @@
 /release
 /coverage*.txt
 /apidocs/*.html
+*.db

@@ -347,9 +347,13 @@ func (s *rtspSource) handleMissingH264Params(c *gortsplib.Client, tracks gortspl
 
 	case <-paramsReceived:
 		s.log(logger.Info, "H264 parameters extracted")
+		tmpSps := make([]byte, len(sps))
+		copy(tmpSps, sps)
+		h264Track.SetSPS(tmpSps)
 
-		h264Track.SetSPS(sps)
-		h264Track.SetPPS(pps)
+		tmpPps := make([]byte, len(pps))
+		copy(tmpPps, pps)
+		h264Track.SetPPS(tmpPps)
 
 		res := s.parent.onSourceStaticSetReady(pathSourceStaticSetReadyReq{
 			source: s,
