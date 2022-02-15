@@ -200,14 +200,12 @@ func (p *Core) createResources(initial bool) error {
 
 	if p.conf.Store {
 		if p.pathStore == nil {
-			p.pathStore = newStore(
-				p.conf,
-				p,
-			)
-
-			if p.pathStore != nil {
-				// reset conf
-				p.conf = p.pathStore.conf
+			p.pathStore = newStore(p.conf)
+			c, err := p.pathStore.loadPaths()
+			if err == nil {
+				p.conf = c
+			} else {
+				p.Log(logger.Error, "load paths from store error: %s", err)
 			}
 		}
 	}

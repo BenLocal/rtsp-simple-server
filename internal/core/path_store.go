@@ -10,7 +10,6 @@ import (
 
 	"github.com/aler9/gortsplib"
 	"github.com/aler9/rtsp-simple-server/internal/conf"
-	"github.com/aler9/rtsp-simple-server/internal/logger"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -47,22 +46,15 @@ type PathInfo struct {
 	SourceOnDemand bool
 }
 
-type pathStoreParent interface {
-	Log(logger.Level, string, ...interface{})
-}
-
 type pathStore struct {
 	conf      *conf.Conf
-	parent    pathStoreParent
 	storePath string
 }
 
 func newStore(
 	c *conf.Conf,
-	parent pathStoreParent,
 ) (s *pathStore) {
 	s = &pathStore{
-		parent:    parent,
 		conf:      c,
 		storePath: default_db_file,
 	}
@@ -71,27 +63,28 @@ func newStore(
 		s.storePath = s.conf.StorePath
 	}
 
+	return s
+}
+
+func (s *pathStore) loadPaths() (newConf *conf.Conf, err error) {
 	ext := filepath.Ext(s.storePath)
 	if ext != ".db" {
-		s.log(logger.Error, "StorePath must end with .db suffix ")
-		return nil
+		return nil, fmt.Errorf("StorePath must end with .db suffix ")
 	}
 
 	dir, _ := filepath.Split(s.storePath)
 	if _, err := os.Stat(dir); err != nil {
 		err := os.Mkdir(dir, fs.ModeDir)
 		if err != nil {
-			s.log(logger.Error, "%s ", err)
-			return nil
+			return nil, err
 		}
 	}
 
-	_, err := os.Stat(s.storePath)
+	_, err = os.Stat(s.storePath)
 	if err != nil && os.IsNotExist(err) {
 		db, err := sql.Open("sqlite3", s.storePath)
 		if err != nil {
-			s.log(logger.Error, "%s ", err)
-			return nil
+			return nil, err
 		}
 		defer db.Close()
 		sqlStmt := `CREATE TABLE paths (
@@ -104,18 +97,16 @@ func newStore(
 		`
 		_, err = db.Exec(sqlStmt)
 		if err != nil {
-			s.log(logger.Error, "%s ", err)
-			return nil
+			return nil, err
 		}
 	}
 
 	paths, err := s.pathList()
 	if err != nil {
-		s.log(logger.Error, "%s ", err)
-		return s
+		return nil, err
 	}
-	var newConf conf.Conf
-	s.cloneStruct(&newConf, c)
+
+	s.cloneStruct(&newConf, s.conf)
 	for _, path := range paths {
 		sp, err := s.getSourceProtocol(path.SourceProtocol)
 		if err != nil {
@@ -130,12 +121,10 @@ func newStore(
 
 	err = newConf.CheckAndFillMissing()
 	if err != nil {
-		s.log(logger.Error, "%s ", err)
-		return
+		return nil, err
 	}
 
-	s.conf = &newConf
-	return s
+	return newConf, nil
 }
 
 func (s *pathStore) pathList() (info []*PathInfo, err error) {
@@ -255,10 +244,6 @@ func (s *pathStore) onDeletePath(path string) error {
 	}
 
 	return nil
-}
-
-func (a *pathStore) log(level logger.Level, format string, args ...interface{}) {
-	a.parent.Log(level, "[PATH DB] "+format, args...)
 }
 
 func (a *pathStore) cloneStruct(dest interface{}, source interface{}) {
