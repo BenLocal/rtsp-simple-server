@@ -16,6 +16,7 @@ import (
 	"github.com/aler9/gortsplib/pkg/rtpaac"
 	"github.com/aler9/gortsplib/pkg/rtph264"
 	"github.com/notedit/rtmp/av"
+	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 
 	"github.com/aler9/rtsp-simple-server/internal/conf"
@@ -37,9 +38,17 @@ func pathNameAndQuery(inURL *url.URL) (string, url.Values, string) {
 	return pathName, ur.Query(), ur.RawQuery
 }
 
+type rtmpConnState int
+
+const (
+	rtmpConnStateIdle rtmpConnState = iota //nolint:deadcode,varcheck
+	rtmpConnStateRead
+	rtmpConnStatePublish
+)
+
 type rtmpConnTrackIDPayloadPair struct {
 	trackID int
-	buf     []byte
+	packet  *rtp.Packet
 }
 
 type rtmpConnPathManager interface {
@@ -71,7 +80,7 @@ type rtmpConn struct {
 	ctxCancel  func()
 	path       *path
 	ringBuffer *ringbuffer.RingBuffer // read
-	state      gortsplib.ServerSessionState
+	state      rtmpConnState
 	stateMutex sync.Mutex
 }
 
@@ -141,7 +150,7 @@ func (c *rtmpConn) ip() net.IP {
 	return c.conn.RemoteAddr().(*net.TCPAddr).IP
 }
 
-func (c *rtmpConn) safeState() gortsplib.ServerSessionState {
+func (c *rtmpConn) safeState() rtmpConnState {
 	c.stateMutex.Lock()
 	defer c.stateMutex.Unlock()
 	return c.state
@@ -246,7 +255,7 @@ func (c *rtmpConn) runRead(ctx context.Context) error {
 	}()
 
 	c.stateMutex.Lock()
-	c.state = gortsplib.ServerSessionStateRead
+	c.state = rtmpConnStateRead
 	c.stateMutex.Unlock()
 
 	var videoTrack *gortsplib.TrackH264
@@ -330,14 +339,7 @@ func (c *rtmpConn) runRead(ctx context.Context) error {
 		pair := data.(rtmpConnTrackIDPayloadPair)
 
 		if videoTrack != nil && pair.trackID == videoTrackID {
-			var pkt rtp.Packet
-			err := pkt.Unmarshal(pair.buf)
-			if err != nil {
-				c.log(logger.Warn, "unable to decode RTP packet: %v", err)
-				continue
-			}
-
-			nalus, pts, err := h264Decoder.DecodeUntilMarker(&pkt)
+			nalus, pts, err := h264Decoder.DecodeUntilMarker(pair.packet)
 			if err != nil {
 				if err != rtph264.ErrMorePacketsNeeded && err != rtph264.ErrNonStartingPacketAndNoPrevious {
 					c.log(logger.Warn, "unable to decode video track: %v", err)
@@ -398,14 +400,7 @@ func (c *rtmpConn) runRead(ctx context.Context) error {
 				return err
 			}
 		} else if audioTrack != nil && pair.trackID == audioTrackID {
-			var pkt rtp.Packet
-			err := pkt.Unmarshal(pair.buf)
-			if err != nil {
-				c.log(logger.Warn, "unable to decode RTP packet: %v", err)
-				continue
-			}
-
-			aus, pts, err := aacDecoder.Decode(&pkt)
+			aus, pts, err := aacDecoder.Decode(pair.packet)
 			if err != nil {
 				if err != rtpaac.ErrMorePacketsNeeded {
 					c.log(logger.Warn, "unable to decode audio track: %v", err)
@@ -493,7 +488,7 @@ func (c *rtmpConn) runPublish(ctx context.Context) error {
 	}()
 
 	c.stateMutex.Lock()
-	c.state = gortsplib.ServerSessionStatePublish
+	c.state = rtmpConnStatePublish
 	c.stateMutex.Unlock()
 
 	// disable write deadline
@@ -510,9 +505,9 @@ func (c *rtmpConn) runPublish(ctx context.Context) error {
 	rtcpSenders := rtcpsenderset.New(tracks, rres.stream.onPacketRTCP)
 	defer rtcpSenders.Close()
 
-	onPacketRTP := func(trackID int, payload []byte) {
-		rtcpSenders.OnPacketRTP(trackID, payload)
-		rres.stream.onPacketRTP(trackID, payload)
+	onPacketRTP := func(trackID int, pkt *rtp.Packet) {
+		rtcpSenders.OnPacketRTP(trackID, pkt)
+		rres.stream.onPacketRTP(trackID, pkt)
 	}
 
 	for {
@@ -555,17 +550,8 @@ func (c *rtmpConn) runPublish(ctx context.Context) error {
 				return fmt.Errorf("error while encoding H264: %v", err)
 			}
 
-			bytss := make([][]byte, len(pkts))
-			for i, pkt := range pkts {
-				byts, err := pkt.Marshal()
-				if err != nil {
-					return fmt.Errorf("error while encoding H264: %v", err)
-				}
-				bytss[i] = byts
-			}
-
-			for _, byts := range bytss {
-				onPacketRTP(videoTrackID, byts)
+			for _, pkt := range pkts {
+				onPacketRTP(videoTrackID, pkt)
 			}
 
 		case av.AAC:
@@ -578,17 +564,8 @@ func (c *rtmpConn) runPublish(ctx context.Context) error {
 				return fmt.Errorf("error while encoding AAC: %v", err)
 			}
 
-			bytss := make([][]byte, len(pkts))
-			for i, pkt := range pkts {
-				byts, err := pkt.Marshal()
-				if err != nil {
-					return fmt.Errorf("error while encoding AAC: %v", err)
-				}
-				bytss[i] = byts
-			}
-
-			for _, byts := range bytss {
-				onPacketRTP(audioTrackID, byts)
+			for _, pkt := range pkts {
+				onPacketRTP(audioTrackID, pkt)
 			}
 		}
 	}
@@ -646,12 +623,12 @@ func (c *rtmpConn) onReaderAccepted() {
 }
 
 // onReaderPacketRTP implements reader.
-func (c *rtmpConn) onReaderPacketRTP(trackID int, payload []byte) {
-	c.ringBuffer.Push(rtmpConnTrackIDPayloadPair{trackID, payload})
+func (c *rtmpConn) onReaderPacketRTP(trackID int, pkt *rtp.Packet) {
+	c.ringBuffer.Push(rtmpConnTrackIDPayloadPair{trackID, pkt})
 }
 
 // onReaderPacketRTCP implements reader.
-func (c *rtmpConn) onReaderPacketRTCP(trackID int, payload []byte) {
+func (c *rtmpConn) onReaderPacketRTCP(trackID int, pkt rtcp.Packet) {
 }
 
 // onReaderAPIDescribe implements reader.
