@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	codecH264 = 7
-	codecAAC  = 10
+	codecH264     = 7
+	codecAAC      = 10
+	QueueMaxCount = 100
 )
 
 type flvSessionParent interface {
@@ -58,7 +59,7 @@ func newFlvSession(
 		Req:           req,
 		w:             w,
 		wait:          wait,
-		Queue:         make(chan av.Packet, 100),
+		Queue:         make(chan av.Packet, QueueMaxCount),
 		parent:        parent,
 		setHeaderFunc: setHeaderFunc,
 	}
@@ -78,6 +79,18 @@ outer:
 				s.log(logger.Info, "muxer queue closed")
 				break outer
 			}
+
+			// count := len(s.Queue)
+			// if count > QueueMaxCount/2 {
+			// 	s.log(logger.Info, "remove muxer queue current count: %s", len(s.Queue))
+			// 	for i := 0; i < count; i++ {
+			// 		_, ok = <-s.Queue
+			// 		if !ok {
+			// 			s.log(logger.Info, "muxer queue closed")
+			// 			break outer
+			// 		}
+			// 	}
+			// }
 
 			err := s.muxer.WritePacket(pkg)
 			if err != nil {

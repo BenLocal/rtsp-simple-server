@@ -16,6 +16,7 @@ import (
 	"github.com/aler9/gortsplib/pkg/rtph264"
 	"github.com/aler9/rtsp-simple-server/internal/logger"
 	"github.com/notedit/rtmp/av"
+	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 )
 
@@ -25,7 +26,7 @@ const (
 
 type flvMuxerTrackIDPayloadPair struct {
 	trackID int
-	buf     []byte
+	packet  *rtp.Packet
 }
 
 type flvMuxerPathManager interface {
@@ -229,14 +230,7 @@ func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 				pair := data.(flvMuxerTrackIDPayloadPair)
 
 				if videoTrack != nil && pair.trackID == videoTrackID {
-					var pkt rtp.Packet
-					err := pkt.Unmarshal(pair.buf)
-					if err != nil {
-						r.log(logger.Warn, "unable to decode RTP packet: %v", err)
-						continue
-					}
-
-					nalus, pts, err := h264Decoder.DecodeUntilMarker(&pkt)
+					nalus, pts, err := h264Decoder.DecodeUntilMarker(pair.packet)
 					if err != nil {
 						if err != rtph264.ErrMorePacketsNeeded &&
 							err != rtph264.ErrNonStartingPacketAndNoPrevious {
@@ -299,14 +293,7 @@ func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 					}
 
 				} else if audioTrack != nil && pair.trackID == audioTrackID {
-					var pkt rtp.Packet
-					err := pkt.Unmarshal(pair.buf)
-					if err != nil {
-						r.log(logger.Warn, "unable to decode RTP packet: %v", err)
-						continue
-					}
-
-					aus, pts, err := aacDecoder.Decode(&pkt)
+					aus, pts, err := aacDecoder.Decode(pair.packet)
 					if err != nil {
 						if err != rtpaac.ErrMorePacketsNeeded {
 							r.log(logger.Warn, "unable to decode audio track: %v", err)
@@ -481,12 +468,12 @@ func (r *flvMuxer) onReaderAccepted() {
 }
 
 // onReaderPacketRTP implements reader.
-func (r *flvMuxer) onReaderPacketRTP(trackID int, payload []byte) {
-	r.ringBuffer.Push(flvMuxerTrackIDPayloadPair{trackID, payload})
+func (r *flvMuxer) onReaderPacketRTP(trackID int, pkt *rtp.Packet) {
+	r.ringBuffer.Push(flvMuxerTrackIDPayloadPair{trackID, pkt})
 }
 
 // onReaderPacketRTCP implements reader.
-func (r *flvMuxer) onReaderPacketRTCP(trackID int, payload []byte) {
+func (r *flvMuxer) onReaderPacketRTCP(trackID int, pkt rtcp.Packet) {
 }
 
 func (r *flvMuxer) onSessionClose(s flvSession) {

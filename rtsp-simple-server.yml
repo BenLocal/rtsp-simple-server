@@ -157,7 +157,7 @@ paths:
     source: rtsp://192.168.35.108/ch2
     sourceOnDemand: yes
   ch2:
-    source: rtsp://admin:qq111111@10.1.72.220:554/psia/streaming/channels/501
+    source: rtsp://admin:qq111111@10.1.72.222:554/h264/ch33/main/av_stream
     sourceOnDemand: yes
   ~^ff/(.+):
     runOnDemand: ffmpeg -re -i rtsp://localhost:$RTSP_PORT/$G1 -vcodec libx264 -preset medium -acodec copy -f rtsp rtsp://localhost:$RTSP_PORT/$RTSP_PATH
