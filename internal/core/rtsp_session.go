@@ -69,7 +69,7 @@ func newRTSPSession(
 		parent:          parent,
 	}
 
-	s.log(logger.Info, "opened by %v", s.author.NetConn().RemoteAddr())
+	s.log(logger.Info, "created by %v", s.author.NetConn().RemoteAddr())
 
 	return s
 }
@@ -122,7 +122,7 @@ func (s *rtspSession) onClose(err error) {
 		s.path = nil
 	}
 
-	s.log(logger.Info, "closed (%v)", err)
+	s.log(logger.Info, "destroyed (%v)", err)
 }
 
 // onAnnounce is called by rtspServer.
@@ -134,7 +134,7 @@ func (s *rtspSession) onAnnounce(c *rtspConn, ctx *gortsplib.ServerHandlerOnAnno
 			pathIPs []interface{},
 			pathUser conf.Credential,
 			pathPass conf.Credential) error {
-			return c.authenticate(ctx.Path, pathIPs, pathUser, pathPass, "publish", ctx.Req, ctx.Query)
+			return c.authenticate(ctx.Path, pathIPs, pathUser, pathPass, "publish", ctx.Request, ctx.Query)
 		},
 	})
 
@@ -193,7 +193,7 @@ func (s *rtspSession) onSetup(c *rtspConn, ctx *gortsplib.ServerHandlerOnSetupCt
 				pathIPs []interface{},
 				pathUser conf.Credential,
 				pathPass conf.Credential) error {
-				return c.authenticate(ctx.Path, pathIPs, pathUser, pathPass, "read", ctx.Req, ctx.Query)
+				return c.authenticate(ctx.Path, pathIPs, pathUser, pathPass, "read", ctx.Request, ctx.Query)
 			},
 		})
 
