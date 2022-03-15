@@ -7,6 +7,8 @@ import (
 
 	"github.com/aler9/gortsplib"
 	"github.com/aler9/gortsplib/pkg/h264"
+
+	"github.com/aler9/rtsp-simple-server/internal/logger"
 )
 
 type clientVideoProcessorData struct {
@@ -19,6 +21,7 @@ type clientVideoProcessor struct {
 	ctx     context.Context
 	onTrack func(gortsplib.Track) error
 	onData  func(time.Duration, [][]byte)
+	logger  ClientLogger
 
 	trackInitialized bool
 	queue            chan clientVideoProcessorData
@@ -31,11 +34,13 @@ func newClientVideoProcessor(
 	ctx context.Context,
 	onTrack func(gortsplib.Track) error,
 	onData func(time.Duration, [][]byte),
+	logger ClientLogger,
 ) *clientVideoProcessor {
 	p := &clientVideoProcessor{
 		ctx:     ctx,
 		onTrack: onTrack,
 		onData:  onData,
+		logger:  logger,
 		queue:   make(chan clientVideoProcessorData, clientQueueSize),
 	}
 
@@ -72,7 +77,8 @@ func (p *clientVideoProcessor) doProcess(
 
 	nalus, err := h264.DecodeAnnexB(data)
 	if err != nil {
-		return err
+		p.logger.Log(logger.Warn, "unable to decode Annex-B: %s", err)
+		return nil
 	}
 
 	outNALUs := make([][]byte, 0, len(nalus))
@@ -137,7 +143,10 @@ func (p *clientVideoProcessor) process(
 	data []byte,
 	pts time.Duration,
 	dts time.Duration) {
-	p.queue <- clientVideoProcessorData{data, pts, dts}
+	select {
+	case p.queue <- clientVideoProcessorData{data, pts, dts}:
+	case <-p.ctx.Done():
+	}
 }
 
 func (p *clientVideoProcessor) initializeTrack() error {
