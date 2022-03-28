@@ -15,7 +15,7 @@ readTimeout: 10s
 writeTimeout: 10s
 # Number of read buffers.
 # A higher number allows a wider throughput, a lower number allows to save RAM.
-readBufferCount: 512
+readBufferCount: 20480
 
 # HTTP URL to perform external authentication.
 # Every time a user wants to authenticate, the server calls this URL
@@ -157,7 +157,10 @@ paths:
     source: rtsp://192.168.35.108/ch2
     sourceOnDemand: yes
   ch2:
-    source: rtsp://admin:qq111111@10.1.72.222:554/h264/ch33/main/av_stream
+    source: rtsp://admin:qq111111@10.1.72.220:554/h264/ch33/main/av_stream
+    sourceOnDemand: yes
+  ch3:
+    source: rtsp://ai.iflysse.com:8554/error001
     sourceOnDemand: yes
   ~^ff/(.+):
     runOnDemand: ffmpeg -re -i rtsp://localhost:$RTSP_PORT/$G1 -vcodec libx264 -preset medium -acodec copy -f rtsp rtsp://localhost:$RTSP_PORT/$RTSP_PATH

@@ -17,7 +17,7 @@ import (
 	"github.com/aler9/rtsp-simple-server/internal/logger"
 	"github.com/notedit/rtmp/av"
 	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
+	"github.com/pion/rtp/v2"
 )
 
 const (
@@ -159,8 +159,9 @@ func (r *flvMuxer) run() {
 
 func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) error {
 	res := r.pathManager.onReaderSetupPlay(pathReaderSetupPlayReq{
-		author:   r,
-		pathName: r.pathName,
+		author:       r,
+		pathName:     r.pathName,
+		authenticate: nil,
 	})
 
 	if res.err != nil {
@@ -183,7 +184,7 @@ func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 		switch tt := track.(type) {
 		case *gortsplib.TrackH264:
 			if videoTrack != nil {
-				return fmt.Errorf("can't encode track %d with HLS: too many tracks", i+1)
+				return fmt.Errorf("can't encode track %d with FLV: too many tracks", i+1)
 			}
 
 			videoTrack = tt
@@ -192,7 +193,7 @@ func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 
 		case *gortsplib.TrackAAC:
 			if audioTrack != nil {
-				return fmt.Errorf("can't encode track %d with HLS: too many tracks", i+1)
+				return fmt.Errorf("can't encode track %d with FLV: too many tracks", i+1)
 			}
 
 			audioTrack = tt
