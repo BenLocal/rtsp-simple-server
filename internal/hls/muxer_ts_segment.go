@@ -11,10 +11,15 @@ import (
 	"github.com/asticode/go-astits"
 )
 
+const (
+	// an offset between PCR and PTS/DTS is needed to avoid PCR > PTS
+	pcrOffset = 500 * time.Millisecond
+)
+
 type muxerTSSegment struct {
 	hlsSegmentMaxSize uint64
 	videoTrack        *gortsplib.TrackH264
-	writer            *muxerTSWriter
+	writeData         func(*astits.MuxerData) (int, error)
 
 	startTime      time.Time
 	name           string
@@ -26,16 +31,15 @@ type muxerTSSegment struct {
 }
 
 func newMuxerTSSegment(
+	now time.Time,
 	hlsSegmentMaxSize uint64,
 	videoTrack *gortsplib.TrackH264,
-	writer *muxerTSWriter,
+	writeData func(*astits.MuxerData) (int, error),
 ) *muxerTSSegment {
-	now := time.Now()
-
 	t := &muxerTSSegment{
 		hlsSegmentMaxSize: hlsSegmentMaxSize,
 		videoTrack:        videoTrack,
-		writer:            writer,
+		writeData:         writeData,
 		startTime:         now,
 		name:              strconv.FormatInt(now.Unix(), 10),
 	}
@@ -44,8 +48,6 @@ func newMuxerTSSegment(
 	// - PID == PCRPID
 	// - AdaptationField != nil
 	// - RandomAccessIndicator = true
-
-	writer.currentSegment = t
 
 	return t
 }
@@ -67,7 +69,7 @@ func (t *muxerTSSegment) reader() io.Reader {
 }
 
 func (t *muxerTSSegment) writeH264(
-	startPCR time.Time,
+	pcr time.Duration,
 	dts time.Duration,
 	pts time.Duration,
 	idrPresent bool,
@@ -85,7 +87,7 @@ func (t *muxerTSSegment) writeH264(
 			af = &astits.PacketAdaptationField{}
 		}
 		af.HasPCR = true
-		af.PCR = &astits.ClockReference{Base: int64(time.Since(startPCR).Seconds() * 90000)}
+		af.PCR = &astits.ClockReference{Base: int64(pcr.Seconds() * 90000)}
 		t.pcrSendCounter = 3
 	}
 	t.pcrSendCounter--
@@ -96,14 +98,14 @@ func (t *muxerTSSegment) writeH264(
 
 	if dts == pts {
 		oh.PTSDTSIndicator = astits.PTSDTSIndicatorOnlyPTS
-		oh.PTS = &astits.ClockReference{Base: int64(pts.Seconds() * 90000)}
+		oh.PTS = &astits.ClockReference{Base: int64((pts + pcrOffset).Seconds() * 90000)}
 	} else {
 		oh.PTSDTSIndicator = astits.PTSDTSIndicatorBothPresent
-		oh.DTS = &astits.ClockReference{Base: int64(dts.Seconds() * 90000)}
-		oh.PTS = &astits.ClockReference{Base: int64(pts.Seconds() * 90000)}
+		oh.DTS = &astits.ClockReference{Base: int64((dts + pcrOffset).Seconds() * 90000)}
+		oh.PTS = &astits.ClockReference{Base: int64((pts + pcrOffset).Seconds() * 90000)}
 	}
 
-	_, err := t.writer.WriteData(&astits.MuxerData{
+	_, err := t.writeData(&astits.MuxerData{
 		PID:             256,
 		AdaptationField: af,
 		PES: &astits.PESData{
@@ -130,7 +132,7 @@ func (t *muxerTSSegment) writeH264(
 }
 
 func (t *muxerTSSegment) writeAAC(
-	startPCR time.Time,
+	pcr time.Duration,
 	pts time.Duration,
 	enc []byte,
 	ausLen int) error {
@@ -142,12 +144,12 @@ func (t *muxerTSSegment) writeAAC(
 		// send PCR once in a while
 		if t.pcrSendCounter == 0 {
 			af.HasPCR = true
-			af.PCR = &astits.ClockReference{Base: int64(time.Since(startPCR).Seconds() * 90000)}
+			af.PCR = &astits.ClockReference{Base: int64(pcr.Seconds() * 90000)}
 			t.pcrSendCounter = 3
 		}
 	}
 
-	_, err := t.writer.WriteData(&astits.MuxerData{
+	_, err := t.writeData(&astits.MuxerData{
 		PID:             257,
 		AdaptationField: af,
 		PES: &astits.PESData{
@@ -155,7 +157,7 @@ func (t *muxerTSSegment) writeAAC(
 				OptionalHeader: &astits.PESOptionalHeader{
 					MarkerBits:      2,
 					PTSDTSIndicator: astits.PTSDTSIndicatorOnlyPTS,
-					PTS:             &astits.ClockReference{Base: int64(pts.Seconds() * 90000)},
+					PTS:             &astits.ClockReference{Base: int64((pts + pcrOffset).Seconds() * 90000)},
 				},
 				PacketLength: uint16(len(enc) + 8),
 				StreamID:     192, // audio

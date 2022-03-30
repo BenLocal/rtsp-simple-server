@@ -11,11 +11,9 @@ import (
 	"github.com/aler9/gortsplib/pkg/rtpaac"
 	"github.com/aler9/gortsplib/pkg/rtph264"
 	"github.com/notedit/rtmp/av"
-	"github.com/pion/rtp/v2"
 
 	"github.com/aler9/rtsp-simple-server/internal/conf"
 	"github.com/aler9/rtsp-simple-server/internal/logger"
-	"github.com/aler9/rtsp-simple-server/internal/rtcpsenderset"
 	"github.com/aler9/rtsp-simple-server/internal/rtmp"
 )
 
@@ -136,14 +134,19 @@ func (s *rtmpSource) runInner() bool {
 
 					var h264Encoder *rtph264.Encoder
 					if videoTrack != nil {
-						h264Encoder = rtph264.NewEncoder(96, nil, nil, nil)
+						h264Encoder = &rtph264.Encoder{PayloadType: 96}
+						h264Encoder.Init()
 						videoTrackID = len(tracks)
 						tracks = append(tracks, videoTrack)
 					}
 
 					var aacEncoder *rtpaac.Encoder
 					if audioTrack != nil {
-						aacEncoder = rtpaac.NewEncoder(96, audioTrack.ClockRate(), nil, nil, nil)
+						aacEncoder = &rtpaac.Encoder{
+							PayloadType: 97,
+							SampleRate:  audioTrack.ClockRate(),
+						}
+						aacEncoder.Init()
 						audioTrackID = len(tracks)
 						tracks = append(tracks, audioTrack)
 					}
@@ -161,15 +164,6 @@ func (s *rtmpSource) runInner() bool {
 					defer func() {
 						s.parent.onSourceStaticSetNotReady(pathSourceStaticSetNotReadyReq{source: s})
 					}()
-
-					rtcpSenders := rtcpsenderset.New(tracks, res.stream.onPacketRTCP)
-					defer rtcpSenders.Close()
-
-					onPacketRTP := func(trackID int, pkt *rtp.Packet) {
-						rtcpSenders.OnPacketRTP(trackID, pkt)
-						res.stream.onPacketRTP(trackID, pkt)
-					}
-
 					for {
 						conn.SetReadDeadline(time.Now().Add(time.Duration(s.readTimeout)))
 						pkt, err := conn.ReadPacket()
@@ -206,7 +200,7 @@ func (s *rtmpSource) runInner() bool {
 							}
 
 							for _, pkt := range pkts {
-								onPacketRTP(videoTrackID, pkt)
+								res.stream.writePacketRTP(videoTrackID, pkt)
 							}
 
 						case av.AAC:
@@ -220,7 +214,7 @@ func (s *rtmpSource) runInner() bool {
 							}
 
 							for _, pkt := range pkts {
-								onPacketRTP(audioTrackID, pkt)
+								res.stream.writePacketRTP(audioTrackID, pkt)
 							}
 						}
 					}

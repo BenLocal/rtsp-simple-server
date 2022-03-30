@@ -14,7 +14,6 @@ import (
 	"github.com/aler9/gortsplib/pkg/base"
 	"github.com/aler9/gortsplib/pkg/h264"
 	"github.com/aler9/gortsplib/pkg/rtph264"
-	"github.com/pion/rtcp"
 	"github.com/pion/rtp/v2"
 
 	"github.com/aler9/rtsp-simple-server/internal/conf"
@@ -206,11 +205,7 @@ func (s *rtspSource) runInner() bool {
 			}()
 
 			c.OnPacketRTP = func(trackID int, pkt *rtp.Packet) {
-				res.stream.onPacketRTP(trackID, pkt)
-			}
-
-			c.OnPacketRTCP = func(trackID int, pkt rtcp.Packet) {
-				res.stream.onPacketRTCP(trackID, pkt)
+				res.stream.writePacketRTP(trackID, pkt)
 			}
 
 			_, err = c.Play(nil)
@@ -258,7 +253,8 @@ func (s *rtspSource) handleMissingH264Params(c *gortsplib.Client, tracks gortspl
 
 	var streamMutex sync.RWMutex
 	var stream *stream
-	decoder := rtph264.NewDecoder()
+	decoder := &rtph264.Decoder{}
+	decoder.Init()
 	var sps []byte
 	var pps []byte
 	paramsReceived := make(chan struct{})
@@ -300,16 +296,7 @@ func (s *rtspSource) handleMissingH264Params(c *gortsplib.Client, tracks gortspl
 				}
 			}
 		} else {
-			stream.onPacketRTP(trackID, pkt)
-		}
-	}
-
-	c.OnPacketRTCP = func(trackID int, pkt rtcp.Packet) {
-		streamMutex.RLock()
-		defer streamMutex.RUnlock()
-
-		if stream != nil {
-			stream.onPacketRTCP(trackID, pkt)
+			stream.writePacketRTP(trackID, pkt)
 		}
 	}
 

@@ -11,7 +11,6 @@ import (
 
 	"github.com/aler9/rtsp-simple-server/internal/hls"
 	"github.com/aler9/rtsp-simple-server/internal/logger"
-	"github.com/aler9/rtsp-simple-server/internal/rtcpsenderset"
 )
 
 const (
@@ -90,7 +89,6 @@ outer:
 
 func (s *hlsSource) runInner() bool {
 	var stream *stream
-	var rtcpSenders *rtcpsenderset.RTCPSenderSet
 	var videoTrackID int
 	var audioTrackID int
 	var videoEnc *rtph264.Encoder
@@ -99,22 +97,26 @@ func (s *hlsSource) runInner() bool {
 	defer func() {
 		if stream != nil {
 			s.parent.onSourceStaticSetNotReady(pathSourceStaticSetNotReadyReq{source: s})
-			rtcpSenders.Close()
 		}
 	}()
 
-	onTracks := func(videoTrack gortsplib.Track, audioTrack gortsplib.Track) error {
+	onTracks := func(videoTrack *gortsplib.TrackH264, audioTrack *gortsplib.TrackAAC) error {
 		var tracks gortsplib.Tracks
 
 		if videoTrack != nil {
 			videoTrackID = len(tracks)
-			videoEnc = rtph264.NewEncoder(96, nil, nil, nil)
+			videoEnc = &rtph264.Encoder{PayloadType: 96}
+			videoEnc.Init()
 			tracks = append(tracks, videoTrack)
 		}
 
 		if audioTrack != nil {
 			audioTrackID = len(tracks)
-			audioEnc = rtpaac.NewEncoder(97, audioTrack.ClockRate(), nil, nil, nil)
+			audioEnc = &rtpaac.Encoder{
+				PayloadType: 97,
+				SampleRate:  audioTrack.ClockRate(),
+			}
+			audioEnc.Init()
 			tracks = append(tracks, audioTrack)
 		}
 
@@ -129,7 +131,6 @@ func (s *hlsSource) runInner() bool {
 		s.Log(logger.Info, "ready")
 
 		stream = res.stream
-		rtcpSenders = rtcpsenderset.New(tracks, stream.onPacketRTCP)
 
 		return nil
 	}
@@ -145,8 +146,7 @@ func (s *hlsSource) runInner() bool {
 		}
 
 		for _, pkt := range pkts {
-			rtcpSenders.OnPacketRTP(videoTrackID, pkt)
-			stream.onPacketRTP(videoTrackID, pkt)
+			stream.writePacketRTP(videoTrackID, pkt)
 		}
 	}
 
@@ -161,8 +161,7 @@ func (s *hlsSource) runInner() bool {
 		}
 
 		for _, pkt := range pkts {
-			rtcpSenders.OnPacketRTP(audioTrackID, pkt)
-			stream.onPacketRTP(audioTrackID, pkt)
+			stream.writePacketRTP(audioTrackID, pkt)
 		}
 	}
 

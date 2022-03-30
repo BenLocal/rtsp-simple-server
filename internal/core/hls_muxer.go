@@ -17,7 +17,6 @@ import (
 	"github.com/aler9/gortsplib/pkg/ringbuffer"
 	"github.com/aler9/gortsplib/pkg/rtpaac"
 	"github.com/aler9/gortsplib/pkg/rtph264"
-	"github.com/pion/rtcp"
 	"github.com/pion/rtp/v2"
 
 	"github.com/aler9/rtsp-simple-server/internal/conf"
@@ -296,7 +295,8 @@ func (m *hlsMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 
 			videoTrack = tt
 			videoTrackID = i
-			h264Decoder = rtph264.NewDecoder()
+			h264Decoder = &rtph264.Decoder{}
+			h264Decoder.Init()
 
 		case *gortsplib.TrackAAC:
 			if audioTrack != nil {
@@ -305,7 +305,8 @@ func (m *hlsMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 
 			audioTrack = tt
 			audioTrackID = i
-			aacDecoder = rtpaac.NewDecoder(track.ClockRate())
+			aacDecoder = &rtpaac.Decoder{SampleRate: track.ClockRate()}
+			aacDecoder.Init()
 		}
 	}
 
@@ -537,10 +538,6 @@ func (m *hlsMuxer) onReaderAccepted() {
 // onReaderPacketRTP implements reader.
 func (m *hlsMuxer) onReaderPacketRTP(trackID int, pkt *rtp.Packet) {
 	m.ringBuffer.Push(hlsMuxerTrackIDPayloadPair{trackID, pkt})
-}
-
-// onReaderPacketRTCP implements reader.
-func (m *hlsMuxer) onReaderPacketRTCP(trackID int, pkt rtcp.Packet) {
 }
 
 // onReaderAPIDescribe implements reader.
