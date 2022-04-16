@@ -212,6 +212,14 @@ type Conf struct {
 	HLSSegmentMaxSize  StringSize     `json:"hlsSegmentMaxSize"`
 	HLSAllowOrigin     string         `json:"hlsAllowOrigin"`
 
+	// FLV
+	FLVDisable bool   `json:"flvDisable"`
+	FLVAddress string `json:"flvAddress"`
+	
+	// Store
+	Store     bool   `json:"store"`
+	StorePath string `json:"storePath"`
+
 	// paths
 	Paths map[string]*PathConf `json:"paths"`
 }
@@ -347,6 +355,10 @@ func (conf *Conf) CheckAndFillMissing() error {
 
 	if conf.HLSAddress == "" {
 		conf.HLSAddress = ":8888"
+	}
+
+	if conf.FLVAddress == "" {
+		conf.FLVAddress = ":8889"
 	}
 
 	if conf.HLSSegmentCount == 0 {

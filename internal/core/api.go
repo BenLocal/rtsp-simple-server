@@ -15,6 +15,11 @@ import (
 	"github.com/aler9/rtsp-simple-server/internal/logger"
 )
 
+type APIPathInfo struct {
+	Path     *string        `json:"path"`
+	PathConf *conf.PathConf `json:"info"`
+}
+
 func interfaceIsEmpty(i interface{}) bool {
 	return reflect.ValueOf(i).Kind() != reflect.Ptr || reflect.ValueOf(i).IsNil()
 }
@@ -156,6 +161,12 @@ type apiHLSServer interface {
 	onAPIHLSMuxersList(req hlsServerAPIMuxersListReq) hlsServerAPIMuxersListRes
 }
 
+type apiPathStore interface {
+	onAddOrUpdatePath(info *PathInfo) error
+	onDeletePath(path string) error
+	onStrSourceProtocol(in conf.SourceProtocol) string
+}
+
 type apiParent interface {
 	Log(logger.Level, string, ...interface{})
 	onAPIConfigSet(conf *conf.Conf)
@@ -169,6 +180,7 @@ type api struct {
 	rtmpServer  apiRTMPServer
 	hlsServer   apiHLSServer
 	parent      apiParent
+	store       apiPathStore
 
 	mutex sync.Mutex
 	s     *http.Server
@@ -182,6 +194,7 @@ func newAPI(
 	rtspsServer apiRTSPServer,
 	rtmpServer apiRTMPServer,
 	hlsServer apiHLSServer,
+	store apiPathStore,
 	parent apiParent,
 ) (*api, error) {
 	ln, err := net.Listen("tcp", address)
@@ -197,6 +210,7 @@ func newAPI(
 		rtmpServer:  rtmpServer,
 		hlsServer:   hlsServer,
 		parent:      parent,
+		store:       store,
 	}
 
 	router := gin.New()
@@ -207,9 +221,11 @@ func newAPI(
 	group.POST("/v1/config/set", a.onConfigSet)
 	group.POST("/v1/config/paths/add/*name", a.onConfigPathsAdd)
 	group.POST("/v1/config/paths/edit/*name", a.onConfigPathsEdit)
+	group.POST("/v1/config/paths/addOrEdit/*name", a.onConfigPathsAddOrEdit)
 	group.POST("/v1/config/paths/remove/*name", a.onConfigPathsDelete)
 
 	group.GET("/v1/paths/list", a.onPathsList)
+	group.GET("/v1/paths/info/*name", a.onConfigPathsInfo)
 
 	if !interfaceIsEmpty(a.rtspServer) {
 		group.GET("/v1/rtspsessions/list", a.onRTSPSessionsList)
@@ -337,6 +353,20 @@ func (a *api) onConfigPathsAdd(ctx *gin.Context) {
 		return
 	}
 
+	// logic
+	if a.store != nil {
+		err = a.store.onAddOrUpdatePath(&PathInfo{
+			Path:           name,
+			Source:         newConfPath.Source,
+			SourceProtocol: a.store.onStrSourceProtocol(newConfPath.SourceProtocol),
+			SourceOnDemand: newConfPath.SourceOnDemand,
+		})
+		if err != nil {
+			ctx.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+	}
+
 	a.conf = &newConf
 
 	// since reloading the configuration can cause the shutdown of the API,
@@ -380,6 +410,20 @@ func (a *api) onConfigPathsEdit(ctx *gin.Context) {
 		return
 	}
 
+	if a.store != nil {
+		// logic
+		err = a.store.onAddOrUpdatePath(&PathInfo{
+			Path:           name,
+			Source:         newConfPath.Source,
+			SourceProtocol: a.store.onStrSourceProtocol(newConfPath.SourceProtocol),
+			SourceOnDemand: newConfPath.SourceOnDemand,
+		})
+		if err != nil {
+			ctx.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+	}
+
 	a.conf = &newConf
 
 	// since reloading the configuration can cause the shutdown of the API,
@@ -387,6 +431,43 @@ func (a *api) onConfigPathsEdit(ctx *gin.Context) {
 	go a.parent.onAPIConfigSet(&newConf)
 
 	ctx.Status(http.StatusOK)
+}
+
+func (a *api) onConfigPathsAddOrEdit(ctx *gin.Context) {
+	name := ctx.Param("name")
+	if len(name) < 2 || name[0] != '/' {
+		ctx.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	name = name[1:]
+
+	if _, ok := a.conf.Paths[name]; ok {
+		a.onConfigPathsEdit(ctx)
+	} else {
+		a.onConfigPathsAdd(ctx)
+	}
+}
+
+func (a *api) onConfigPathsInfo(ctx *gin.Context) {
+	name := ctx.Param("name")
+	if len(name) < 2 || name[0] != '/' {
+		ctx.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	name = name[1:]
+
+	out := &APIPathInfo{
+		Path: &name,
+	}
+
+	info, ok := a.conf.Paths[name]
+
+	if !ok {
+		ctx.JSON(http.StatusOK, out)
+		return
+	}
+	out.PathConf = info
+	ctx.JSON(http.StatusOK, out)
 }
 
 func (a *api) onConfigPathsDelete(ctx *gin.Context) {
@@ -414,6 +495,15 @@ func (a *api) onConfigPathsDelete(ctx *gin.Context) {
 	if err != nil {
 		ctx.AbortWithStatus(http.StatusBadRequest)
 		return
+	}
+
+	// logic
+	if a.store != nil {
+		err = a.store.onDeletePath(name)
+		if err != nil {
+			ctx.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
 	}
 
 	a.conf = &newConf
