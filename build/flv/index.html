@@ -57,6 +57,12 @@
 <body>
 
     <div class="mainContainer">
+        <div style="margin-bottom: 5px;">
+            <input name="url" id="url" style="width: 300px;" value="ws://127.0.0.1:8889/ch2"/>
+            <button onclick="reloadVideo()">start/restart</button>
+            <button onclick="destoryVideo()">stop</button>
+        </div>
+
         <video name="videoElement" class="centeredVideo" id="videoElement" controls width="1024" height="576" autoplay>
             Your browser is too old which doesn't support HTML5 video.
         </video>
@@ -65,22 +71,23 @@
     <script src="https://cdn.bootcdn.net/ajax/libs/flv.js/1.6.1/flv.min.js"></script>
 
     <script>
-        if (flvjs.isSupported()) {
-            startVideo()
+        var flvPlayer;
+        if (!flvjs.isSupported()) {
+            console.log("not supported flv")
         }
 
         function startVideo() {
             var videoElement = document.getElementById('videoElement');
-            var flvPlayer = flvjs.createPlayer({
+            var url = document.getElementById('url').value;
+            console.log(url);
+            flvPlayer = flvjs.createPlayer({
                 type: 'flv',
                 isLive: true,
-                hasAudio: true,
-                hasVideo: true,
+                //hasAudio: false,
+                //hasVideo: true,
                 enableStashBuffer: true,
-                //url: 'http://10.1.72.200:8889/ch1'
-                //url: 'http://10.1.72.200:8889/28cc2af1596bee24d121d27f06e1233d'
-                url: 'ws://127.0.0.1:8889/ch2'
-                //url: "ws://10.1.72.202:10087/rtsp/1440866047581364229/?url=rtsp://admin:qq111111@10.1.72.220:554/psia/streaming/channels/601"
+                autoCleanupsourceBuffer: true,
+                url: url
             });
             flvPlayer.attachMediaElement(videoElement);
             flvPlayer.load();
@@ -100,7 +107,10 @@
         }
 
         function reloadVideo() {
-            destoryVideo()
+            if(flvPlayer){
+                destoryVideo()
+            }
+   
             startVideo()
         }
     </script>

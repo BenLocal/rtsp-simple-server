@@ -1,10 +1,8 @@
 package core
 
 import (
-	"fmt"
 	"io"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/aler9/gortsplib"
@@ -27,7 +25,6 @@ type flvSessionParent interface {
 }
 
 type flvSession struct {
-	wg            sync.WaitGroup
 	Path          string
 	Req           *http.Request
 	wait          chan struct{}
@@ -47,7 +44,6 @@ type flvResponse struct {
 }
 
 func newFlvSession(
-	wg sync.WaitGroup,
 	path string,
 	req *http.Request,
 	w io.Writer,
@@ -56,7 +52,6 @@ func newFlvSession(
 	setHeaderFunc setHeaderFunc,
 ) flvSession {
 	s := flvSession{
-		wg:            wg,
 		Path:          path,
 		Req:           req,
 		muxer:         flv.NewMuxer(w),
@@ -68,13 +63,11 @@ func newFlvSession(
 
 	s.log(logger.Info, "created")
 
-	wg.Add(1)
 	go s.run()
 	return s
 }
 
 func (s *flvSession) run() {
-	defer s.wg.Done()
 	defer s.log(logger.Info, "destroyed")
 outer:
 	for {
@@ -142,10 +135,7 @@ func (s flvSession) WriteMetadata(videoTrack *gortsplib.TrackH264, audioTrack *g
 		return err
 	}
 
-	if videoTrack != nil {
-		if videoTrack.SPS() == nil || videoTrack.PPS() == nil {
-			return fmt.Errorf("invalid H264 track: SPS or PPS not provided into the SDP")
-		}
+	if videoTrack != nil && videoTrack.SPS() != nil && videoTrack.PPS() != nil {
 		codec := nh264.Codec{
 			SPS: map[int][]byte{
 				0: videoTrack.SPS(),

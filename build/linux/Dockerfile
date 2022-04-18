@@ -19,5 +19,3 @@ RUN ls
 FROM scratch AS export-stage
 COPY --from=stage1 /s/rtsp-simple-server .
 COPY --from=stage1 /s/rtsp-simple-server.yml .
-COPY --from=stage1 /s/Dockerfile .
-COPY --from=stage1 /s/docker-compose.yml .

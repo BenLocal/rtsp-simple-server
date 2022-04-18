@@ -257,7 +257,6 @@ func (s *flvServer) findOrCreateMuxer(path string) *flvMuxer {
 
 func (s *flvServer) createSession(req *flvRequest, m *flvMuxer) flvSession {
 	return newFlvSession(
-		s.wg,
 		req.path,
 		req.r,
 		req.w,
