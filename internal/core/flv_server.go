@@ -238,7 +238,7 @@ func (s *flvServer) onHttpRequest(ctx *gin.Context, wait chan struct{}) *flvRequ
 
 func (s *flvServer) findOrCreateMuxer(path string) *flvMuxer {
 	fm, ok := s.muxers[path]
-	if !ok || fm.isDestroyed() {
+	if !ok || fm.NotUsed() {
 		fm = newFlvMuxer(
 			s.ctx,
 			&s.wg,

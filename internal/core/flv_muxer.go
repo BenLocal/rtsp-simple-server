@@ -52,7 +52,7 @@ type flvMuxer struct {
 	// in
 	request       chan flvSession
 	requestClosed chan flvSession
-	destroyed     bool
+	notUsed       bool
 }
 
 func newFlvMuxer(
@@ -96,16 +96,13 @@ func (r *flvMuxer) Path() string {
 	return r.pathName
 }
 
-func (r *flvMuxer) isDestroyed() bool {
-	return r.destroyed
+func (r *flvMuxer) NotUsed() bool {
+	return r.notUsed
 }
 
 func (r *flvMuxer) run() {
 	defer r.wg.Done()
-	defer func() {
-		r.destroyed = true
-		r.log(logger.Info, "destroyed")
-	}()
+	defer r.log(logger.Info, "destroyed")
 
 	innerCtx, innerCtxCancel := context.WithCancel(context.Background())
 	innerReady := make(chan struct{})
@@ -352,7 +349,7 @@ func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 		case <-closeCheckTicker.C:
 			if len(r.queues) <= 0 {
 				r.ringBuffer.Close()
-				r.destroyed = true
+				r.notUsed = true
 				return fmt.Errorf("not used anymore")
 			}
 
