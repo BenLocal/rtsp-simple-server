@@ -283,7 +283,7 @@ func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 						}
 					}
 
-					avcc, err := h264.EncodeAVCC(data.h264NALUs)
+					avcc, err := h264.AVCCEncode(data.h264NALUs)
 					if err != nil {
 						return err
 					}

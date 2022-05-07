@@ -388,10 +388,9 @@ func (pa *path) run() {
 				}
 
 			case <-pa.onDemandStaticSourceCloseTimer.C:
-				pa.sourceSetNotReady()
-				pa.onDemandStaticSourceStop()
-
 				if pa.shouldClose() {
+					pa.sourceSetNotReady()
+					pa.onDemandStaticSourceStop()
 					return fmt.Errorf("not in use")
 				}
 
