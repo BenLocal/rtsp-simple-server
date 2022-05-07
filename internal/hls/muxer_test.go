@@ -64,6 +64,8 @@ func TestMuxerVideoAudio(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "#EXTM3U\n"+
+		"#EXT-X-VERSION:3\n"+
+		"\n"+
 		"#EXT-X-STREAM-INF:BANDWIDTH=200000,CODECS=\"avc1.010203,mp4a.40.2\"\n"+
 		"stream.m3u8\n", string(byts))
 
@@ -75,6 +77,7 @@ func TestMuxerVideoAudio(t *testing.T) {
 		`#EXT-X-ALLOW-CACHE:NO\n` +
 		`#EXT-X-TARGETDURATION:4\n` +
 		`#EXT-X-MEDIA-SEQUENCE:0\n` +
+		`#EXT-X-INDEPENDENT-SEGMENTS\n` +
 		`\n` +
 		`#EXT-X-PROGRAM-DATE-TIME:(.*?)\n` +
 		`#EXTINF:4,\n` +
@@ -197,6 +200,8 @@ func TestMuxerVideoOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "#EXTM3U\n"+
+		"#EXT-X-VERSION:3\n"+
+		"\n"+
 		"#EXT-X-STREAM-INF:BANDWIDTH=200000,CODECS=\"avc1.010203\"\n"+
 		"stream.m3u8\n", string(byts))
 
@@ -208,6 +213,7 @@ func TestMuxerVideoOnly(t *testing.T) {
 		`#EXT-X-ALLOW-CACHE:NO\n` +
 		`#EXT-X-TARGETDURATION:4\n` +
 		`#EXT-X-MEDIA-SEQUENCE:0\n` +
+		`#EXT-X-INDEPENDENT-SEGMENTS\n` +
 		`\n` +
 		`#EXT-X-PROGRAM-DATE-TIME:(.*?)\n` +
 		`#EXTINF:4,\n` +
@@ -282,6 +288,8 @@ func TestMuxerAudioOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "#EXTM3U\n"+
+		"#EXT-X-VERSION:3\n"+
+		"\n"+
 		"#EXT-X-STREAM-INF:BANDWIDTH=200000,CODECS=\"mp4a.40.2\"\n"+
 		"stream.m3u8\n", string(byts))
 
@@ -293,6 +301,7 @@ func TestMuxerAudioOnly(t *testing.T) {
 		`#EXT-X-ALLOW-CACHE:NO\n` +
 		`#EXT-X-TARGETDURATION:1\n` +
 		`#EXT-X-MEDIA-SEQUENCE:0\n` +
+		`#EXT-X-INDEPENDENT-SEGMENTS\n` +
 		`\n` +
 		`#EXT-X-PROGRAM-DATE-TIME:(.*?)\n` +
 		`#EXTINF:1,\n` +

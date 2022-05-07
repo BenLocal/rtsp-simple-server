@@ -60,6 +60,8 @@ Features:
   * [From a Raspberry Pi Camera](#from-a-raspberry-pi-camera)
   * [From OBS Studio](#from-obs-studio)
   * [From OpenCV](#from-opencv)
+* [Read from the server](#read-from-the-server)
+  * [From VLC and Ubuntu](#from-vlc-and-ubuntu)
 * [RTSP protocol](#rtsp-protocol)
   * [RTSP general usage](#rtsp-general-usage)
   * [TCP transport](#tcp-transport)
@@ -541,11 +543,11 @@ If credentials are in use, use the following parameters:
 To publish a video stream from OpenCV to the server, OpenCV must be compiled with GStreamer support, by following this procedure:
 
 ```
-sudo apt install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+sudo apt install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-ugly gstreamer1.0-rtsp python3-dev python3-numpy
 git clone --depth=1 -b 4.5.4 https://github.com/opencv/opencv
 cd opencv
 mkdir build && cd build
-cmake -D WITH_GSTREAMER=ON ..
+cmake -D CMAKE_INSTALL_PREFIX=/usr -D WITH_GSTREAMER=ON ..
 make -j$(nproc)
 sudo make install
 ```
@@ -562,7 +564,7 @@ width = 800
 height = 600
 
 out = cv2.VideoWriter('appsrc ! videoconvert' + \
-    ' ! x264enc speed-preset=ultrafast bitrate=600' + \
+    ' ! x264enc speed-preset=ultrafast bitrate=600 key-int-max=40' + \
     ' ! rtspclientsink location=rtsp://localhost:8554/mystream',
     cv2.CAP_GSTREAMER, 0, fps, (width, height), True)
 if not out.isOpened():
@@ -580,6 +582,25 @@ while True:
     print("frame written to the server")
 
     sleep(1 / fps)
+```
+
+## Read from the server
+
+### From VLC and Ubuntu
+
+The VLC shipped with Ubuntu 21.10 doesn't support playing RTSP due to a license issue (see [here](https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=982299) and [here](https://stackoverflow.com/questions/69766748/cvlc-cannot-play-rtsp-omxplayer-instead-can)).
+
+To overcome the issue, remove the default VLC instance and install the snap version:
+
+```
+sudo apt purge -y vlc
+snap install vlc
+```
+
+Then use it to read the stream:
+
+```
+vlc rtsp://localhost:8554/mystream
 ```
 
 ## RTSP protocol
@@ -639,7 +660,7 @@ ffmpeg -rtsp_transport udp_multicast -i rtsp://localhost:8554/mystream -c copy o
 or _GStreamer_:
 
 ```
-gst-launch-1.0 rtspsrc protocols=udp-mcast location=rtsps://ip:8555/...
+gst-launch-1.0 rtspsrc protocols=udp-mcast location=rtsps://ip:8554/...
 ```
 
 or _VLC_ (append `?vlcmulticast` to the URL):
@@ -666,16 +687,16 @@ serverKey: server.key
 serverCert: server.crt
 ```
 
-Streams can then be published and read with the `rtsps` scheme and the `8555` port:
+Streams can then be published and read with the `rtsps` scheme and the `8322` port:
 
 ```
-ffmpeg -i rtsps://ip:8555/...
+ffmpeg -i rtsps://ip:8322/...
 ```
 
 If the client is _GStreamer_, disable the certificate validation:
 
 ```
-gst-launch-1.0 rtspsrc tls-validation-flags=0 location=rtsps://ip:8555/...
+gst-launch-1.0 rtspsrc tls-validation-flags=0 location=rtsps://ip:8322/...
 ```
 
 At the moment _VLC_ doesn't support reading encrypted RTSP streams. A workaround consists in launching an instance of _rtsp-simple-server_ on the same machine in which _VLC_ is running, using it for reading the encrypted stream with the proxy mode, and reading the proxied stream with _VLC_.

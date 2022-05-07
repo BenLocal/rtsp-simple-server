@@ -48,7 +48,7 @@ html, body {
 
 <video id="video" muted controls autoplay></video>
 
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.1.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.1.5"></script>
 
 <script>
 
@@ -67,6 +67,8 @@ const create = () => {
 	} else {
 		const hls = new Hls({
 			progressive: true,
+			liveSyncDurationCount: 3,
+			liveMaxLatencyDurationCount: 4,
 		});
 
 		hls.on(Hls.Events.ERROR, (evt, data) => {
