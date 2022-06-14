@@ -50,6 +50,13 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 )
 
+require (
+	github.com/gorilla/websocket v1.5.0
+	github.com/mattn/go-sqlite3 v1.14.13
+)
+
 replace github.com/notedit/rtmp => github.com/aler9/rtmp v0.0.0-20210403095203-3be4a5535927
 
 replace github.com/orcaman/writerseeker => github.com/aler9/writerseeker v0.0.0-20220601075008-6f0e685b9c82
+
+replace github.com/aler9/gortsplib => github.com/benlocal/gortsplib v0.0.0-20220614064357-2bd791301d56

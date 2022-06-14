@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+    <title>flv.js demo</title>
+
+    <style>
+        .mainContainer {
+            display: block;
+            width: 1024px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .urlInput {
+            display: block;
+            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+
+        .centeredVideo {
+            display: block;
+            width: 100%;
+            height: 576px;
+            margin-left: auto;
+            margin-right: auto;
+            margin-bottom: auto;
+        }
+
+        .controls {
+            display: block;
+            width: 100%;
+            text-align: left;
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: 8px;
+            margin-bottom: 10px;
+        }
+
+        .logcatBox {
+            border-color: #CCCCCC;
+            font-size: 11px;
+            font-family: Menlo, Consolas, monospace;
+            display: block;
+            width: 100%;
+            text-align: left;
+            margin-left: auto;
+            margin-right: auto;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="mainContainer">
+        <div style="margin-bottom: 5px;">
+            <input name="url" id="url" style="width: 300px;" value="ws://127.0.0.1:8889/ch2"/>
+            <button onclick="reloadVideo()">start/restart</button>
+            <button onclick="destoryVideo()">stop</button>
+        </div>
+
+        <video name="videoElement" class="centeredVideo" id="videoElement" controls width="1024" height="576" autoplay>
+            Your browser is too old which doesn't support HTML5 video.
+        </video>
+    </div>
+
+    <!-- <script src="https://cdn.bootcdn.net/ajax/libs/flv.js/1.6.1/flv.min.js"></script> -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/flv.js/1.5.0/flv.min.js"></script>
+    <script>
+        var flvPlayer;
+        if (!flvjs.isSupported()) {
+            console.log("not supported flv")
+        }
+
+        function startVideo() {
+            var videoElement = document.getElementById('videoElement');
+            var url = document.getElementById('url').value;
+            console.log(url);
+            flvPlayer = flvjs.createPlayer({
+                type: 'flv',
+                isLive: true,
+                //hasAudio: false,
+                //hasVideo: true,
+                //enableStashBuffer: true,
+                //autoCleanupsourceBuffer: true,
+                url: url
+            });
+            flvPlayer.attachMediaElement(videoElement);
+            flvPlayer.load();
+            flvPlayer.play();
+        }
+
+        videoElement.addEventListener('click', function () {
+            alert('是否支持点播视频：' + flvjs.getFeatureList().mseFlvPlayback + ' 是否支持httpflv直播流：' + flvjs.getFeatureList().mseLiveFlvPlayback)
+        })
+
+        function destoryVideo() {
+            flvPlayer.pause();
+            flvPlayer.unload();
+            flvPlayer.detachMediaElement();
+            flvPlayer.destroy();
+            flvPlayer = null;
+        }
+
+        function reloadVideo() {
+            if(flvPlayer){
+                destoryVideo()
+            }
+   
+            startVideo()
+        }
+    </script>
+
+</body>
+
+</html>

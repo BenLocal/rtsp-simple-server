@@ -116,7 +116,7 @@ hlsAlwaysRemux: no
 # * mpegts - uses MPEG-TS segments, for maximum compatibility.
 # * fmp4 - uses fragmented MP4 segments, more efficient.
 # * lowLatency - uses Low-Latency HLS.
-hlsVariant: mpegts
+hlsVariant: lowLatency
 # Number of HLS segments to keep on the server.
 # Segments allow to seek through the stream.
 # Their number doesn't influence latency.
@@ -141,7 +141,7 @@ hlsSegmentMaxSize: 50M
 hlsAllowOrigin: '*'
 # Enable TLS/HTTPS on the HLS server.
 # This is required for Low-Latency HLS.
-hlsEncryption: no
+hlsEncryption: yes
 # Path to the server key. This is needed only when encryption is yes.
 # This can be generated with:
 # openssl genrsa -out server.key 2048
@@ -149,6 +149,19 @@ hlsEncryption: no
 hlsServerKey: server.key
 # Path to the server certificate.
 hlsServerCert: server.crt
+
+
+######################SELF######################
+
+# disable support for the FLV protocol.
+flvDisable: no
+# address of the FLV listener.
+flvAddress: :8889
+
+#store of sqllite DB
+store: yes
+#store of path
+storePath: C:/data/server.db
 
 ###############################################
 # Path parameters
@@ -160,7 +173,22 @@ hlsServerCert: server.crt
 # The settings under the path "all" are applied to all paths that do not match
 # another entry.
 paths:
-  all:
+  ch1:
+    source: rtsp://192.168.35.108/ch2
+    sourceOnDemand: yes
+  ch2:
+    source: rtsp://admin:qq111111@10.1.72.220:554/psia/streaming/channels/501
+    sourceOnDemand: yes
+  ch3:
+    source: rtsp://admin:qq111111@10.1.72.220:554/psia/streaming/channels/301
+    sourceOnDemand: yes
+  ~^ff/(.+):
+    runOnDemand: ffmpeg -re -i rtsp://localhost:$RTSP_PORT/$G1 -vcodec libx264 -preset medium -acodec copy -f rtsp rtsp://localhost:$RTSP_PORT/$RTSP_PATH
+    runOnDemandRestart: yes
+    runOnDemandStartTimeout: 10s
+    runOnDemandCloseAfter: 10s
+    disablePublisherOverride: yes
+  ~^publish/(.+):
     # Source of the stream. This can be:
     # * publisher -> the stream is published by a RTSP or RTMP client
     # * rtsp://existing-url -> the stream is pulled from another RTSP server / camera
