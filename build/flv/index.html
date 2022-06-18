@@ -63,9 +63,14 @@
             <button onclick="destoryVideo()">stop</button>
         </div>
 
+        <span style="color: red;" id="static"></span>
+
         <video name="videoElement" class="centeredVideo" id="videoElement" controls width="1024" height="576" autoplay>
             Your browser is too old which doesn't support HTML5 video.
         </video>
+
+        <span id="messageLogs">
+        </span>
     </div>
 
     <!-- <script src="https://cdn.bootcdn.net/ajax/libs/flv.js/1.6.1/flv.min.js"></script> -->
@@ -85,18 +90,37 @@
                 isLive: true,
                 //hasAudio: false,
                 //hasVideo: true,
-                //enableStashBuffer: true,
-                //autoCleanupsourceBuffer: true,
+                // enableStashBuffer: true,
+                // stashInitialSize: 64 * 1024,
+                autoCleanupsourceBuffer: false,
+                // autoCleanupMaxBackwardDuration: 10 * 60,
+                // autoCleanupMinBackwardDuration: 1 * 60,
                 url: url
             });
             flvPlayer.attachMediaElement(videoElement);
+            flvPlayer.on("statistics_info", function(info) {
+                document.getElementById("static").innerHTML = info.decodedFrames + "/" + info.droppedFrames + "/[speed:" + info.speed + "]";
+            });
+
             flvPlayer.load();
             flvPlayer.play();
         }
 
         videoElement.addEventListener('click', function () {
             alert('是否支持点播视频：' + flvjs.getFeatureList().mseFlvPlayback + ' 是否支持httpflv直播流：' + flvjs.getFeatureList().mseLiveFlvPlayback)
-        })
+        });
+        videoElement.addEventListener('waiting', function() {
+            console.log("test waiting", videoElement.buffered, videoElement.currentTime)
+            log("waiting", videoElement)
+        });
+        videoElement.addEventListener('canplay', function() {
+            console.log("test canplay", videoElement.buffered, videoElement.currentTime)
+            log("canplay", videoElement)
+        });
+        videoElement.addEventListener('canplaythrough', function() {
+            console.log("test canplaythrough", videoElement.buffered, videoElement.currentTime)
+            log("canplaythrough", videoElement)
+        });
 
         function destoryVideo() {
             flvPlayer.pause();
@@ -104,6 +128,7 @@
             flvPlayer.detachMediaElement();
             flvPlayer.destroy();
             flvPlayer = null;
+            clearLog();
         }
 
         function reloadVideo() {
@@ -112,6 +137,14 @@
             }
    
             startVideo()
+        }
+
+        function log(msg) {
+            document.getElementById('messageLogs').innerHTML += msg + '<br>';
+        }
+
+        function clearLog() {
+            document.getElementById('messageLogs').innerHTML = "";
         }
     </script>
 

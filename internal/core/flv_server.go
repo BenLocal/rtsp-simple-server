@@ -51,6 +51,7 @@ type flvRequest struct {
 	w             io.Writer
 	wait          chan struct{}
 	setHeaderFunc setHeaderFunc
+	mute          bool
 }
 
 func newFlvServer(
@@ -159,8 +160,18 @@ func (s *flvServer) onWebSocketRequest(ctx *gin.Context, webSocketKey string, wa
 	w := ctx.Writer
 	r := ctx.Request
 	pa := ctx.Request.URL.Path[1:]
-
-	conn, err := (&websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}).Upgrade(w, r, nil)
+	muted := ctx.Request.URL.Query().Get("mute") == "1"
+	w.Header().Set("Content-Type", "video/x-flv")
+	w.Header().Set("Transfer-Encoding", "chunked")
+	conn, err := (&websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}).Upgrade(
+		w,
+		r,
+		nil,
+	)
 	if err != nil {
 		http.NotFound(w, r)
 		return nil
@@ -176,10 +187,12 @@ func (s *flvServer) onWebSocketRequest(ctx *gin.Context, webSocketKey string, wa
 		r:    r,
 		w:    &writer,
 		wait: wait,
+		mute: muted,
 		setHeaderFunc: func(r flvResponse) error {
 			for k, v := range r.Header {
 				ctx.Writer.Header().Set(k, v)
 			}
+			ctx.Writer.WriteHeader(r.Status)
 			if r.Status != 200 {
 				return errors.New("fail status code")
 			}
@@ -192,6 +205,7 @@ func (s *flvServer) onHttpRequest(ctx *gin.Context, wait chan struct{}) *flvRequ
 	w := ctx.Writer
 	r := ctx.Request
 	pa := ctx.Request.URL.Path[1:]
+	muted := ctx.Request.URL.Query().Get("mute") == "1"
 	w.Header().Set("Server", "rtsp-simple-server")
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	w.Header().Add("Access-Control-Allow-Credentials", "true")
@@ -224,6 +238,7 @@ func (s *flvServer) onHttpRequest(ctx *gin.Context, wait chan struct{}) *flvRequ
 		r:    r,
 		w:    w,
 		wait: wait,
+		mute: muted,
 		setHeaderFunc: func(r flvResponse) error {
 			for k, v := range r.Header {
 				ctx.Writer.Header().Set(k, v)

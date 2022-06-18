@@ -116,7 +116,7 @@ hlsAlwaysRemux: no
 # * mpegts - uses MPEG-TS segments, for maximum compatibility.
 # * fmp4 - uses fragmented MP4 segments, more efficient.
 # * lowLatency - uses Low-Latency HLS.
-hlsVariant: lowLatency
+hlsVariant: mpegts
 # Number of HLS segments to keep on the server.
 # Segments allow to seek through the stream.
 # Their number doesn't influence latency.
@@ -177,10 +177,10 @@ paths:
     source: rtsp://192.168.35.108/ch2
     sourceOnDemand: yes
   ch2:
-    source: rtsp://admin:qq111111@10.1.72.220:554/psia/streaming/channels/501
+    source: rtsp://admin:qq111111@10.1.72.220:554/psia/streaming/channels/301
     sourceOnDemand: yes
   ch3:
-    source: rtsp://admin:qq111111@10.1.72.220:554/psia/streaming/channels/301
+    source: rtsp://admin:qq111111@10.1.72.220:554/psia/streaming/channels/401
     sourceOnDemand: yes
   ~^ff/(.+):
     runOnDemand: ffmpeg -re -i rtsp://localhost:$RTSP_PORT/$G1 -vcodec libx264 -preset medium -acodec copy -f rtsp rtsp://localhost:$RTSP_PORT/$RTSP_PATH

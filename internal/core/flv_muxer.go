@@ -13,13 +13,8 @@ import (
 	"time"
 
 	"github.com/aler9/gortsplib"
-	"github.com/aler9/gortsplib/pkg/aac"
-	"github.com/aler9/gortsplib/pkg/h264"
 	"github.com/aler9/gortsplib/pkg/ringbuffer"
-	"github.com/aler9/gortsplib/pkg/rtpaac"
 	"github.com/aler9/rtsp-simple-server/internal/logger"
-	"github.com/notedit/rtmp/av"
-	nh264 "github.com/notedit/rtmp/codec/h264"
 )
 
 const (
@@ -176,7 +171,6 @@ func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 	videoTrackID := -1
 	var audioTrack *gortsplib.TrackAAC
 	audioTrackID := -1
-	var aacDecoder *rtpaac.Decoder
 
 	for i, track := range res.stream.tracks() {
 		switch tt := track.(type) {
@@ -195,15 +189,6 @@ func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 
 			audioTrack = tt
 			audioTrackID = i
-			audioTrack = tt
-			audioTrackID = i
-			aacDecoder = &rtpaac.Decoder{
-				SampleRate:       tt.ClockRate(),
-				SizeLength:       tt.SizeLength(),
-				IndexLength:      tt.IndexLength(),
-				IndexDeltaLength: tt.IndexDeltaLength(),
-			}
-			aacDecoder.Init()
 		}
 	}
 
@@ -218,11 +203,6 @@ func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 		author: r,
 	})
 
-	var videoInitialPTS *time.Duration
-	videoFirstIDRFound := false
-	var videoStartDTS time.Duration
-	var videoDTSExtractor *h264.DTSExtractor
-
 	writerDone := make(chan error)
 
 	go func() {
@@ -233,135 +213,137 @@ func (r *flvMuxer) runInner(innerCtx context.Context, innerReady chan struct{}) 
 					return fmt.Errorf("terminated")
 				}
 				data := item.(*data)
-
-				if videoTrack != nil && data.trackID == videoTrackID {
-					if data.h264NALUs == nil {
-						continue
-					}
-
-					// video is decoded in another routine,
-					// while audio is decoded in this routine:
-					// we have to sync their PTS.
-					if videoInitialPTS == nil {
-						v := data.h264PTS
-						videoInitialPTS = &v
-					}
-					pts := data.h264PTS - *videoInitialPTS
-					idrPresent := false
-					nonIDRPresent := false
-
-					for _, nalu := range data.h264NALUs {
-						typ := h264.NALUType(nalu[0] & 0x1F)
-						switch typ {
-						case h264.NALUTypeIDR:
-							idrPresent = true
-
-						case h264.NALUTypeNonIDR:
-							nonIDRPresent = true
-						}
-					}
-
-					var dts time.Duration
-
-					// wait until we receive an IDR
-					if !videoFirstIDRFound {
-						if !idrPresent {
-							continue
-						}
-
-						videoFirstIDRFound = true
-						videoDTSExtractor = h264.NewDTSExtractor()
-
-						var err error
-						dts, err = videoDTSExtractor.Extract(data.h264NALUs, pts)
-						if err != nil {
-							return err
-						}
-
-						videoStartDTS = dts
-						dts = 0
-						pts -= videoStartDTS
-					} else {
-						if !idrPresent && !nonIDRPresent {
-							continue
-						}
-
-						var err error
-						dts, err = videoDTSExtractor.Extract(data.h264NALUs, pts)
-						if err != nil {
-							return err
-						}
-
-						dts -= videoStartDTS
-						pts -= videoStartDTS
-					}
-
-					if h264.IDRPresent(data.h264NALUs) {
-						codec := nh264.Codec{
-							SPS: map[int][]byte{
-								0: videoTrack.SPS(),
-							},
-							PPS: map[int][]byte{
-								0: videoTrack.PPS(),
-							},
-						}
-						b := make([]byte, 128)
-						var n int
-						codec.ToConfig(b, &n)
-						b = b[:n]
-						pkg := av.Packet{
-							Type: av.H264DecoderConfig,
-							Data: b,
-						}
-						for _, q := range r.sessions {
-							q.Push(videoTrack, audioTrack, pkg)
-						}
-					}
-
-					avcc, err := h264.AVCCEncode(data.h264NALUs)
-					if err != nil {
-						return err
-					}
-
-					pkg := av.Packet{
-						Type:  av.H264,
-						Data:  avcc,
-						Time:  dts,
-						CTime: pts - dts,
-					}
-					for _, q := range r.sessions {
-						q.Push(videoTrack, audioTrack, pkg)
-					}
-
-				} else if audioTrack != nil && data.trackID == audioTrackID {
-					aus, pts, err := aacDecoder.Decode(data.rtp)
-					if err != nil {
-						if err != rtpaac.ErrMorePacketsNeeded {
-							r.log(logger.Warn, "unable to decode audio track: %v", err)
-						}
-						continue
-					}
-
-					if videoTrack != nil && !videoFirstIDRFound {
-						continue
-					}
-
-					pts -= videoStartDTS
-					if pts < 0 {
-						continue
-					}
-
-					for i, au := range aus {
-						pkg := av.Packet{
-							Type: av.AAC,
-							Data: au,
-							Time: pts + time.Duration(i)*aac.SamplesPerAccessUnit*time.Second/time.Duration(audioTrack.ClockRate()),
-						}
-						for _, q := range r.sessions {
-							q.Push(videoTrack, audioTrack, pkg)
-						}
-					}
+				for _, q := range r.sessions {
+					q.Push(videoTrack, audioTrack, videoTrackID, audioTrackID, data)
 				}
+				// if videoTrack != nil && data.trackID == videoTrackID {
+				// 	if data.h264NALUs == nil {
+				// 		continue
+				// 	}
+
+				// 	// video is decoded in another routine,
+				// 	// while audio is decoded in this routine:
+				// 	// we have to sync their PTS.
+				// 	if videoInitialPTS == nil {
+				// 		v := data.h264PTS
+				// 		videoInitialPTS = &v
+				// 	}
+				// 	pts := data.h264PTS - *videoInitialPTS
+				// 	idrPresent := false
+				// 	nonIDRPresent := false
+
+				// 	for _, nalu := range data.h264NALUs {
+				// 		typ := h264.NALUType(nalu[0] & 0x1F)
+				// 		switch typ {
+				// 		case h264.NALUTypeIDR:
+				// 			idrPresent = true
+
+				// 		case h264.NALUTypeNonIDR:
+				// 			nonIDRPresent = true
+				// 		}
+				// 	}
+
+				// 	var dts time.Duration
+
+				// 	// wait until we receive an IDR
+				// 	if !videoFirstIDRFound {
+				// 		if !idrPresent {
+				// 			continue
+				// 		}
+
+				// 		videoFirstIDRFound = true
+				// 		videoDTSExtractor = h264.NewDTSExtractor()
+
+				// 		var err error
+				// 		dts, err = videoDTSExtractor.Extract(data.h264NALUs, pts)
+				// 		if err != nil {
+				// 			return err
+				// 		}
+
+				// 		videoStartDTS = dts
+				// 		dts = 0
+				// 		pts -= videoStartDTS
+				// 	} else {
+				// 		if !idrPresent && !nonIDRPresent {
+				// 			continue
+				// 		}
+
+				// 		var err error
+				// 		dts, err = videoDTSExtractor.Extract(data.h264NALUs, pts)
+				// 		if err != nil {
+				// 			return err
+				// 		}
+
+				// 		dts -= videoStartDTS
+				// 		pts -= videoStartDTS
+				// 	}
+
+				// 	if h264.IDRPresent(data.h264NALUs) {
+				// 		codec := nh264.Codec{
+				// 			SPS: map[int][]byte{
+				// 				0: videoTrack.SPS(),
+				// 			},
+				// 			PPS: map[int][]byte{
+				// 				0: videoTrack.PPS(),
+				// 			},
+				// 		}
+				// 		b := make([]byte, 128)
+				// 		var n int
+				// 		codec.ToConfig(b, &n)
+				// 		b = b[:n]
+				// 		pkg := av.Packet{
+				// 			Type: av.H264DecoderConfig,
+				// 			Data: b,
+				// 		}
+				// 		for _, q := range r.sessions {
+				// 			q.Push(videoTrack, audioTrack, pkg)
+				// 		}
+				// 	}
+
+				// 	avcc, err := h264.AVCCEncode(data.h264NALUs)
+				// 	if err != nil {
+				// 		return err
+				// 	}
+
+				// 	pkg := av.Packet{
+				// 		Type:  av.H264,
+				// 		Data:  avcc,
+				// 		Time:  dts,
+				// 		CTime: pts - dts,
+				// 	}
+				// 	for _, q := range r.sessions {
+				// 		q.Push(videoTrack, audioTrack, pkg)
+				// 	}
+
+				// } else if audioTrack != nil && data.trackID == audioTrackID {
+				// 	aus, pts, err := aacDecoder.Decode(data.rtp)
+				// 	if err != nil {
+				// 		if err != rtpaac.ErrMorePacketsNeeded {
+				// 			r.log(logger.Warn, "unable to decode audio track: %v", err)
+				// 		}
+				// 		continue
+				// 	}
+
+				// 	if videoTrack != nil && !videoFirstIDRFound {
+				// 		continue
+				// 	}
+
+				// 	pts -= videoStartDTS
+				// 	if pts < 0 {
+				// 		continue
+				// 	}
+
+				// 	for i, au := range aus {
+				// 		pkg := av.Packet{
+				// 			Type: av.AAC,
+				// 			Data: au,
+				// 			Time: pts + time.Duration(i)*aac.SamplesPerAccessUnit*time.Second/time.Duration(audioTrack.ClockRate()),
+				// 		}
+				// 		for _, q := range r.sessions {
+				// 			q.Push(videoTrack, audioTrack, pkg)
+				// 		}
+				// 	}
+				// }
 			}
 		}()
 	}()
@@ -472,11 +454,12 @@ func (r *flvMuxer) handleRequest(req *flvSession) {
 		return
 	}
 
-	err = req.WriteHeader()
-	if err != nil {
-		req.colsed()
-		return
-	}
+	// flv has auto write header
+	// err = req.WriteHeader()
+	// if err != nil {
+	// 	req.colsed()
+	// 	return
+	// }
 
 	r.sessions[req.Id()] = req
 }
@@ -493,6 +476,7 @@ func (s *flvMuxer) createSession(req *flvRequest, m *flvMuxer) *flvSession {
 		req.setHeaderFunc,
 		s.readBufferCount,
 		s.ctx,
+		req.mute,
 	)
 }
 
