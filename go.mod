@@ -3,7 +3,7 @@ module github.com/aler9/rtsp-simple-server
 go 1.18
 
 require (
-	code.cloudfoundry.org/bytefmt v0.0.0
+	code.cloudfoundry.org/bytefmt v0.0.0-20211005130812-5bb3c17173e5
 	github.com/abema/go-mp4 v0.10.0
 	github.com/alecthomas/kong v0.7.1
 	github.com/aler9/gortsplib/v2 v2.1.3
@@ -16,7 +16,7 @@ require (
 	github.com/grafov/m3u8 v0.11.1
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/notedit/rtmp v0.0.2
-	github.com/orcaman/writerseeker v0.0.0
+	github.com/orcaman/writerseeker v0.0.0-20200621085525-1d3f536ff85e
 	github.com/pion/ice/v2 v2.2.11
 	github.com/pion/interceptor v0.1.11
 	github.com/pion/rtp v1.7.13
