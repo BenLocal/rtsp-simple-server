@@ -17,6 +17,7 @@ import (
 	"github.com/aler9/rtsp-simple-server/internal/externalcmd"
 	"github.com/aler9/rtsp-simple-server/internal/logger"
 	"github.com/aler9/rtsp-simple-server/internal/rlimit"
+	"github.com/aler9/rtsp-simple-server/internal/store"
 )
 
 var version = "v0.0.0"
@@ -41,6 +42,7 @@ type Core struct {
 	webRTCServer    *webRTCServer
 	api             *api
 	confWatcher     *confwatcher.ConfWatcher
+	pathStore       store.PathStore
 
 	// in
 	chAPIConfigSet chan *conf.Conf
@@ -55,7 +57,7 @@ var cli struct {
 }
 
 // New allocates a core.
-func New(args []string) (*Core, bool) {
+func New(args []string, options ...func(*Core) error) (*Core, bool) {
 	parser, err := kong.New(&cli,
 		kong.Description("rtsp-simple-server / MediaMTX "+version),
 		kong.UsageOnError(),
@@ -96,10 +98,23 @@ func New(args []string) (*Core, bool) {
 		done:           make(chan struct{}),
 	}
 
+	for _, option := range options {
+		if option != nil {
+			if err := option(p); err != nil {
+				fmt.Printf("ERR: %s\n", err)
+				return nil, false
+			}
+		}
+	}
+
 	p.conf, p.confFound, err = conf.Load(p.confPath)
 	if err != nil {
 		fmt.Printf("ERR: %s\n", err)
 		return nil, false
+	}
+
+	if p.pathStore != nil {
+		p.loadFromPathStore(p.conf)
 	}
 
 	err = p.createResources(true)
@@ -688,4 +703,46 @@ func (p *Core) apiConfigSet(conf *conf.Conf) {
 	case p.chAPIConfigSet <- conf:
 	case <-p.ctx.Done():
 	}
+}
+
+// Load pathConf from db
+func (p *Core) loadFromPathStore(conf *conf.Conf) error {
+	if p.pathStore == nil {
+		return nil
+	}
+
+	paths, err := p.pathStore.All()
+
+	if err != nil {
+		return err
+	}
+
+	return conf.LoadPaths(paths)
+}
+
+// called by api.
+func (p *Core) onAddPath(pathConf *conf.PathConf) error {
+	if p.pathStore == nil {
+		return nil
+	}
+
+	return p.pathStore.Insert(pathConf)
+}
+
+// called by api.
+func (p *Core) onEditPath(pathConf *conf.PathConf) error {
+	if p.pathStore == nil {
+		return nil
+	}
+
+	return p.pathStore.Update(pathConf)
+}
+
+// called by api.
+func (p *Core) onDeletePath(name string) error {
+	if p.pathStore == nil {
+		return nil
+	}
+
+	return p.pathStore.Delete(name)
 }

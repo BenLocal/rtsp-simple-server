@@ -451,3 +451,15 @@ func (conf *Conf) CheckAndFillMissing() error {
 
 	return nil
 }
+
+func (conf *Conf) LoadPaths(paths []*PathConf) error {
+	for _, p := range paths {
+		err := p.checkAndFillMissing(conf, p.Source)
+		if err != nil {
+			return err
+		}
+		conf.Paths[p.Source] = p
+	}
+
+	return nil
+}

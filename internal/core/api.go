@@ -104,6 +104,9 @@ type apiRTMPServer interface {
 type apiParent interface {
 	Log(logger.Level, string, ...interface{})
 	apiConfigSet(conf *conf.Conf)
+	onAddPath(newConfPath *conf.PathConf) error
+	onEditPath(confPath *conf.PathConf) error
+	onDeletePath(name string) error
 }
 
 type apiWebRTCServer interface {
@@ -297,6 +300,13 @@ func (a *api) onConfigPathsAdd(ctx *gin.Context) {
 		return
 	}
 
+	// add path conf info into db
+	err = a.parent.onAddPath(newConfPath)
+	if err != nil {
+		ctx.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+
 	a.conf = &newConf
 
 	// since reloading the configuration can cause the shutdown of the API,
@@ -340,6 +350,13 @@ func (a *api) onConfigPathsEdit(ctx *gin.Context) {
 		return
 	}
 
+	// edit path conf info into db
+	err = a.parent.onEditPath(newConfPath)
+	if err != nil {
+		ctx.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+
 	a.conf = &newConf
 
 	// since reloading the configuration can cause the shutdown of the API,
@@ -371,6 +388,13 @@ func (a *api) onConfigPathsDelete(ctx *gin.Context) {
 	delete(newConf.Paths, name)
 
 	err := newConf.CheckAndFillMissing()
+	if err != nil {
+		ctx.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+
+	// edit path conf info into db
+	err = a.parent.onDeletePath(name)
 	if err != nil {
 		ctx.AbortWithStatus(http.StatusBadRequest)
 		return
