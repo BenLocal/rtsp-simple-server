@@ -1,4 +1,4 @@
-package main
+package serve
 
 import "github.com/aler9/rtsp-simple-server/internal/core"
 
